@@ -1,152 +1,144 @@
-﻿using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Diagnostics.Contracts;
-using System.Reflection;
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.UI;
 using Random = UnityEngine.Random;
 
 public class Player : MonoBehaviour
 {
-    public Animator Platform;
-    public Animator Buttons;
-    public Animator ScoreAnim;
-    public Animator PlayerAnim;
-    public GameObject[] Coins;
-    public Rotate[] RotateScripts;
-    public Text ScoreText;
-    public Text highScoreText;
-    public Text lastScoreText;
-    public RectTransform PlatformTrans;
+    public GameObject[] coins; //up down left right
+    public Animator buttonsAnim;
+    public Animator anim;
+    public Animator scoreAnim;
+    public Animator platformAnim;
+    public Text Score;
+    public Text LastScore;
+    public Text BestScore;
+    public Text FPSTxt;
     
-    private int whichCoin;
-    public bool gameIsRuning;
-    public int score;
-    private float timer;
-    private float canTaketimer;
-    private bool canPush = true;
-    private bool canTake = true;
-    private int multiplier = 1;
-    
+    private bool gameIsRunning;
+    private int coinIndex;
+    private bool animIsRunning;
+    private int score;
+    private bool canPress;
+    private Vector3 playerStartPos;
+    private bool addedScore = true;
+    private int tempIndex;
+    private bool canStart = true;
+    private bool changedTheme;
+    private ThemeManager TM;
+    //private float deltaTime; //FPSCounter
+
     private void Start()
     {
-        highScoreText.text = "High Score: " + PlayerPrefs.GetInt("HighScore");
-    }
-    
-    private void Update()
-    {
-        if (!canPush && timer < 1.1f)
-            timer += Time.deltaTime;
+        playerStartPos = transform.position;
+        Application.targetFrameRate = 60;
+        TM = FindObjectOfType<ThemeManager>();
         
-
-        else if (!canPush && timer >= 1.1f)
+    }
+    
+    void Update()
+    {
+        //Debug.Log("gir: " + gameIsRunning + "; air: " + animIsRunning + "; cp: " + canPress + "; as: " + addedScore);
+        /*deltaTime += (Time.unscaledDeltaTime - deltaTime) * 0.1f;
+        float fps = 1.0f / deltaTime;
+        FPSTxt.text = string.Format("{0:0.} fps", fps);*/
+        if (score % 5 == 0 && score > 0 && !changedTheme)
         {
-            canPush = true;
-            timer = 0;
+            changedTheme = true;
+            TM.NextTheme();
         }
-
-        if (!canTake && canTaketimer < .8f)
-            canTaketimer += Time.deltaTime;
-        
-        else if (!canTake && canTaketimer >= .8f)
-        {
-            canTake = true;
-            canTaketimer = 0;
-        }
-
-        if (Input.GetKeyUp(KeyCode.Escape) && gameIsRuning)
-            FinishGame();
     }
 
-    private void OnCollisionEnter2D(Collision2D col)
+    public void MButton()
     {
-        if (col.collider.CompareTag("Coin"))
+        if (gameIsRunning && !animIsRunning && canPress && addedScore && coins[coinIndex].activeSelf)
         {
-            col.gameObject.SetActive(false);
-            RandomizeCoin();
-            if (canTake)
-            {
-                canTake = false;
-                score += multiplier;
-            }
-            ScoreText.text = score.ToString();
+            canPress = false;
+            animIsRunning = true; 
+            anim.SetTrigger("Coin" + (coinIndex + 1));
+            //transform.DOMove(coins[coinIndex].transform.position, .5f).SetEase(Ease.Linear);
+            addedScore = false;
         }
-        else if (col.collider.CompareTag("Obs"))
+    }
+
+    private void OnTriggerEnter2D(Collider2D other)
+    {
+        if (other.CompareTag("Coin"))
         {
-            FinishGame();
-            if (score > PlayerPrefs.GetInt("HighScore"))
+            if (!addedScore)
             {
-                PlayerPrefs.SetInt("HighScore", score); 
-                highScoreText.text = "High Score: " + score;
+                //transform.DOMove(playerStartPos, .5f).SetEase(Ease.Linear).OnComplete(StopAnim);
+                score++;
+                other.gameObject.SetActive(false);
+                //Debug.Log(coinIndex);
+                Score.text = score.ToString();
+                addedScore = true;
+                /*DOTween.Sequence()
+                    .AppendInterval(.5f)
+                    .AppendCallback(Randomize);*/
+                Randomize();
+                changedTheme = false;
             }
+        }
+        else if (other.CompareTag("Obs"))
+        {
+            canStart = true;
+            for(int i = 0; i < coins.Length; i++) 
+                coins[i].SetActive(false);
+            //transform.DOMove(playerStartPos, .4f).SetEase(Ease.Linear).OnComplete(StopAnim);
+            buttonsAnim.SetBool("GameIsRunning", false);
+            scoreAnim.SetBool("GameIsRunning", false);
+            platformAnim.SetBool("GameIsRunning", false);
+            gameIsRunning = false;
+            LastScore.text = "Last Score: " + score;
+            if (score > PlayerPrefs.GetInt("Score"))
+                PlayerPrefs.SetInt("Score", score);
+            BestScore.text = "Best Score: " + PlayerPrefs.GetInt("Score");
+            score = 0;
+            Score.text = "0";
+            addedScore = true;
         }
     }
     
-    public void StartGame()
+    public void PlayButton()
     {
-        score = 0;
-        ScoreText.text = "0";
-        Platform.SetTrigger("Start");
-        Buttons.SetTrigger("Start");
-        ScoreAnim.SetTrigger("Start");
-        RandomizeCoin();
-        for (int i = 0; i < RotateScripts.Length; i++)
-        { 
-            RotateScripts[i].Randomize();
-        }
-        gameIsRuning = true;
-        multiplier = 1;
-    }
-
-    public void Button()
-    {
-        if (canPush && gameIsRuning)
+        if (canStart)
         {
-            if (PlatformTrans.position.y == -1337.4f)
-            {
-                FinishGame();
-            }
-            else
-            {
-                canPush = false;
-                int n = whichCoin + 1;
-                PlayerAnim.SetTrigger("Coin" + n);
-                if (score % 15 == 0 && score != 0)
-                    multiplier++;
-            }
+            if (!gameIsRunning) gameIsRunning = true;
+            canPress = true;
+            Randomize();
+            buttonsAnim.SetBool("GameIsRunning", true);
+            scoreAnim.SetBool("GameIsRunning", true);
+            platformAnim.SetBool("GameIsRunning", true);
+            canStart = false;
         }
     }
 
-    private void RandomizeCoin()
+    public void fix()
     {
-        whichCoin = Random.Range(0, 4);
-        for (int i = 0; i < 4; i++)
+        Debug.Log(transform.position);
+    }
+
+    private void Randomize()
+    {
+        if (gameIsRunning)
         {
-            if (i != whichCoin) 
-                Coins[i].SetActive(false);
-            else if (i == whichCoin)
-                Coins[i].SetActive(true);
+            tempIndex = Random.Range(0, 4);
+            while (tempIndex == coinIndex)
+                tempIndex = Random.Range(0, 4);
+            coinIndex = tempIndex;
+            for (int i = 0; i < coins.Length; i++)
+                coins[i].SetActive(i == coinIndex);
         }
     }
-    
-    void FinishGame()
+
+    public void RunAnim()
     {
-        multiplier = 0;
-        gameIsRuning = false;
-        Platform.SetTrigger("Restart");
-        Buttons.SetTrigger("Restart");
-        ScoreAnim.SetTrigger("Restart");
-            
-        for (int i = 0; i < RotateScripts.Length; i++)
-        {
-            RotateScripts[i].ScoreToChange = -1;
-            RotateScripts[i].CurrentScore = 0;
-        }
-        for (int i = 0; i < 4; i++)
-        {
-            Coins[i].SetActive(false);
-        }
-        lastScoreText.text = "Last Score: " + score;
+        animIsRunning = true;
+    }
+
+    public void StopAnim()
+    {
+        animIsRunning = false;
+        canPress = true;
     }
 }
