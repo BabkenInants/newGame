@@ -6,6 +6,7 @@ TagManager:
   tags:
   - Obs
   - Coin
+  - DefaultPos
   layers:
   - Default
   - TransparentFX
