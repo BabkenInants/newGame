@@ -1,9 +1,13 @@
-﻿using UnityEngine;
+﻿using System.Collections;
+using DG.Tweening;
+using UnityEngine;
 using UnityEngine.UI;
 using Random = UnityEngine.Random;
+using YG;
 
 public class Player : MonoBehaviour
 {
+    #region publicVariables
     public GameObject[] coins; //up down left right
     public Rotate[] obstacles;
     public Image[] hearts;
@@ -31,7 +35,15 @@ public class Player : MonoBehaviour
     public int defaultSpeed = 100;
     [Header("Tutorial")]
     public bool tutorialMode = true;
-    
+    [Header("Continue Game")] 
+    public GameObject continuePanel;
+    public Button[] continuePanelButtons;
+    public Image timerImg;
+    public Text timerTxt;
+    public GameObject authPanel;
+    #endregion
+
+    #region privateVariables
     private int coinIndex;
     private int score;
     private int health = 3;
@@ -47,30 +59,51 @@ public class Player : MonoBehaviour
     private bool canEndGameWithEscape;
     private bool decreasedHealth;
     private ThemeManager TM;
+    private int continueCount = 2;
+    private bool stopTimer;
+    private bool isSecondAd;
+    private bool gotsecondAd;
     //private float deltaTime; //FPSCounter
+    #endregion
 
+    private void OnEnable() => YandexGame.RewardVideoEvent += Continue;
+    private void OnDisable() => YandexGame.RewardVideoEvent -= Continue;
     private void Start()
     {
         Application.targetFrameRate = 60; //30FPS lock on Android problem solution
+        if (!YandexGame.auth)
+            authPanel.SetActive(true);
         TM = FindObjectOfType<ThemeManager>();
-        lastScoreText.text = "Last Score: 0";
-        bestScoreText.text = "Best Score: " + PlayerPrefs.GetInt("Score");
+        if (YandexGame.lang == "en")
+        {
+            lastScoreText.text = "Last Score: 0";
+            bestScoreText.text = "Best Score: " + YandexGame.savesData.bestScore;
+        }
+        else if (YandexGame.lang == "ru")
+        {
+            lastScoreText.text = "Последний Счёт: 0";
+            bestScoreText.text = "Лучший Счёт: " + YandexGame.savesData.bestScore;
+        }
         
         //TODO remove on release for yandex games
         canEndGameWithEscape = Application.platform != RuntimePlatform.WebGLPlayer;
 
-        //tutorialMode = PlayerPrefs.GetInt("CompletedTutorial") == 0;
+        tutorialMode = !YandexGame.savesData.completedTutorial;
         
         if(tutorialMode)
             FindObjectOfType<Tutorial>().StartCoroutine(FindObjectOfType<Tutorial>().RunTutorial());
     }
-    
     void Update()
     {
         //FPSCounter
         /*deltaTime += (Time.unscaledDeltaTime - deltaTime) * 0.1f;
         float fps = 1.0f / deltaTime;
         FPSTxt.text = string.Format("{0:0.} fps", fps);*/
+
+        if (isSecondAd)
+            YandexGame.CloseVideoEvent += getSecondAd;
+        else
+            YandexGame.CloseVideoEvent -= getSecondAd;
         
         if (gameIsRunning)
         {
@@ -114,17 +147,125 @@ public class Player : MonoBehaviour
             }
         }
     }
+    
+    #region Auth
 
+    public void CloseAuth()
+    {
+        authPanel.SetActive(false);
+    }
+
+    public void Auth()
+    {
+        authPanel.SetActive(false);
+        YandexGame.AuthDialog();
+    }
+
+    #endregion
+    #region UI
+    
+    //UI Play Button
+    public void PlayButton()
+    {
+        StartGame();
+    }
+    
     public void MButton()
     {
         //Main Button - The button that is responding when tapping on screen
         if (gameIsRunning && !animIsRunning && canPress && addedScore && coins[coinIndex].activeSelf && 
             FindObjectOfType<Tutorial>().condition != Tutorial.Condition.FiveFold)
         {
-            canPress = false;
+            if (tutorialMode &&
+                FindObjectOfType<Tutorial>().condition is Tutorial.Condition.Tap or Tutorial.Condition.FiveFold ||
+                !tutorialMode)
+            {
+                canPress = false;
+                decreasedHealth = false;
+                anim.SetTrigger("Coin" + (coinIndex + 1));
+                addedScore = false;
+            }
+        }
+    }
+    
+    #endregion
+    #region Mechanics
+    
+    private void StartGame()
+    {
+        if (canStart)
+        {
+            score = 0;
+            health = 3;
+            continueCount = 2;
             decreasedHealth = false;
-            anim.SetTrigger("Coin" + (coinIndex + 1));
-            addedScore = false;
+            gameIsRunning = true;
+            canPress = true;
+            Randomize();
+            for (int i = 0; i < hearts.Length; i++)
+                hearts[i].sprite = heart;
+            buttonsAnim.SetBool("GameIsRunning", true);
+            scoreAnim.SetBool("GameIsRunning", true);
+            platformAnim.SetBool("GameIsRunning", true);
+            heartsAnim.SetBool("GameIsRunning", true);
+            canStart = false;
+        }
+    }
+
+    private void EndGame(bool saveProgress)
+    {
+        continuePanel.SetActive(false);
+        canStart = true;
+        for(int i = 0; i < coins.Length; i++) 
+            coins[i].SetActive(false);
+        buttonsAnim.SetBool("GameIsRunning", false);
+        scoreAnim.SetBool("GameIsRunning", false);
+        platformAnim.SetBool("GameIsRunning", false);
+        heartsAnim.SetBool("GameIsRunning", false);
+        obstacles[0].direction.z = 1;
+        obstacles[1].direction.z = 1;
+        obstacles[2].direction.z = -1;
+        obstacles[3].direction.z = -1;
+        for (int i = 0; i < obstacles.Length; i++)
+        {
+            obstacles[i].ResetPos();
+        }
+        YandexGame.FullscreenShow();
+        gameIsRunning = false;
+        if (score > YandexGame.savesData.bestScore && saveProgress)
+        {
+            YandexGame.savesData.bestScore = score;
+            if(YandexGame.auth)
+                YandexGame.NewLeaderboardScores("LeaderBoard", score);
+            YandexGame.SaveProgress();
+        }
+        if (YandexGame.lang == "en")
+        {
+            lastScoreText.text = "Last Score: " + score;
+            bestScoreText.text = "Best Score: " + YandexGame.savesData.bestScore;
+        }
+        else if (YandexGame.lang == "ru")
+        {
+            lastScoreText.text = "Последний Счёт: " + score;
+            bestScoreText.text = "Лучший Счёт: " + YandexGame.savesData.bestScore;
+        }
+
+        scoreText.text = "0";
+        addedScore = true;
+        for (int i = 0; i < obstacles.Length; i++)
+            obstacles[i].speed = defaultSpeed;
+    }
+    
+    private void Randomize()
+    {
+        if (gameIsRunning)
+        {
+            tempIndex = Random.Range(0, 4);
+            while (tempIndex == coinIndex) 
+                tempIndex = Random.Range(0, 4);
+            coinIndex = tempIndex;
+            for (int i = 0; i < coins.Length; i++)
+                coins[i].SetActive(i == coinIndex);
         }
     }
 
@@ -153,7 +294,21 @@ public class Player : MonoBehaviour
                 decreasedHealth = true;
                 health--;
                 if (health <= 0)
-                    EndGame(true);
+                {
+                    if (continueCount > 0)
+                    {
+                        continuePanel.SetActive(true);
+                        foreach (Button btn in continuePanelButtons)
+                            btn.interactable = true;
+                        StartCoroutine(RunTimer());
+                        continueCount--;
+                        isSecondAd = false;
+                    }
+                    else
+                    {
+                        EndGame(true);
+                    }
+                }
                 else
                 {
                     hearts[health].sprite = emptyHeart;
@@ -162,73 +317,69 @@ public class Player : MonoBehaviour
         }
     }
     
-    //UI Play Button
-    public void PlayButton()
+    #endregion
+    #region Ad&Continue
+    
+    private void Continue(int id)
     {
-        StartGame();
+        isSecondAd = false;
+        if (id == 1)
+            health = 1;
+        else if (id == 2)
+            health = 3;
+        continuePanel.SetActive(false);
+        stopTimer = true;
     }
     
-    private void StartGame()
+    public IEnumerator RunTimer()
     {
-        if (canStart)
+        stopTimer = false;
+        timerImg.fillAmount = 1;
+        int count = 5;
+        while (count >= 0)
         {
-            score = 0;
-            health = 3;
-            decreasedHealth = false;
-            gameIsRunning = true;
-            canPress = true;
-            Randomize();
-            for (int i = 0; i < hearts.Length; i++)
-                hearts[i].sprite = heart;
-            buttonsAnim.SetBool("GameIsRunning", true);
-            scoreAnim.SetBool("GameIsRunning", true);
-            platformAnim.SetBool("GameIsRunning", true);
-            heartsAnim.SetBool("GameIsRunning", true);
-            canStart = false;
+            timerImg.DOFillAmount(.2f * count, 1f);
+            timerTxt.text = count.ToString();
+            yield return new WaitForSeconds(1);
+            count--;
+        }
+        if(!stopTimer)
+            EndGame(true);
+    }
+
+    public void CloseContinue()
+    {
+        EndGame(true);
+        stopTimer = true;
+    }
+
+    public void getSecondAd()
+    {
+        if (!gotsecondAd)
+        {
+            YandexGame.RewVideoShow(2);
+            gotsecondAd = true;
+        }
+    }
+    
+    public void ContinueBtn(bool x2)
+    {
+        foreach (Button btn in continuePanelButtons)
+            btn.interactable = false;
+        YandexGame.RewVideoShow(x2? 2 : 1);
+        gotsecondAd = false;
+        if (x2)
+        {
+            isSecondAd = true;
+            foreach (Image img in hearts)
+            {
+                img.sprite = heart;
+            }
         }
     }
 
-    private void EndGame(bool saveProgress)
-    {
-        canStart = true;
-        for(int i = 0; i < coins.Length; i++) 
-            coins[i].SetActive(false);
-        buttonsAnim.SetBool("GameIsRunning", false);
-        scoreAnim.SetBool("GameIsRunning", false);
-        platformAnim.SetBool("GameIsRunning", false);
-        heartsAnim.SetBool("GameIsRunning", false);
-        obstacles[0].direction.z = 1;
-        obstacles[1].direction.z = 1;
-        obstacles[2].direction.z = -1;
-        obstacles[3].direction.z = -1;
-        for (int i = 0; i < obstacles.Length; i++)
-        {
-            obstacles[i].ResetPos();
-        }
-        gameIsRunning = false;
-        lastScoreText.text = "Last Score: " + score;
-        Debug.Log(score);
-        if (score > PlayerPrefs.GetInt("Score") && saveProgress)
-            PlayerPrefs.SetInt("Score", score);
-        bestScoreText.text = "Best Score: " + PlayerPrefs.GetInt("Score");
-        scoreText.text = "0";
-        addedScore = true;
-        for (int i = 0; i < obstacles.Length; i++)
-            obstacles[i].speed = defaultSpeed;
-    }
-    
-    private void Randomize()
-    {
-        if (gameIsRunning)
-        {
-            tempIndex = Random.Range(0, 4);
-            while (tempIndex == coinIndex) 
-                tempIndex = Random.Range(0, 4);
-            coinIndex = tempIndex;
-            for (int i = 0; i < coins.Length; i++)
-                coins[i].SetActive(i == coinIndex);
-        }
-    }
+    #endregion
+    #region AnimTriggers
     
     public void RunAnim()
     {
@@ -240,4 +391,6 @@ public class Player : MonoBehaviour
         animIsRunning = false;
         canPress = true;
     }
+    
+    #endregion
 }
