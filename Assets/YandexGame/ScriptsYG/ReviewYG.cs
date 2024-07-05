@@ -67,10 +67,10 @@ namespace YG
         }
 
         public void ReviewShow()
-        {
+        {/*
             ReviewNotAvailable.Invoke(); // ?
             YandexGame.EnvironmentData.reviewCanShow = false; // ?
-
+*/
             bool authDialog = true;
 
             if (forUnauthorized == ForUnauthorized.Ignore && !YandexGame.auth)
@@ -79,6 +79,12 @@ namespace YG
             }
 
             YandexGame.ReviewShow(authDialog);
+        }
+
+        public void InvokeReviewNotAvailable()
+        {
+            ReviewNotAvailable.Invoke();
+            YandexGame.EnvironmentData.reviewCanShow = false;
         }
     }
 }

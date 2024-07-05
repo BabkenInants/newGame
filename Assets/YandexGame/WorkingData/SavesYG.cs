@@ -20,6 +20,8 @@ namespace YG
         
         public int bestScore;
         public bool completedTutorial;
+        public bool musicIsOn = true;
+        public bool sfxIsOn = true;
 
         // Поля (сохранения) можно удалять и создавать новые. При обновлении игры сохранения ломаться не должны
 

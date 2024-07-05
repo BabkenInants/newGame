@@ -16,6 +16,7 @@ public class Tutorial : MonoBehaviour
     public Condition condition;
     private bool _pressedPlayBtn;
     private bool _pressedMBtn;
+    public Button[] buttons;
 
     public enum Condition
     {
@@ -41,9 +42,13 @@ public class Tutorial : MonoBehaviour
         playBtnText.DOFade(1, 1f);
         playButton.DOColor(Color.white, .5f);
         buttonsAnim.SetTrigger("TutorialMode");
+        foreach (Button button in buttons)
+            button.interactable = false;
         yield return new WaitForSeconds(1f);
         while (!_pressedPlayBtn)
             yield return new WaitForSeconds(.1f);
+        foreach (Button button in buttons)
+            button.interactable = true;
         panel.GetComponent<Image>().DOFade(.4f, .25f);
         playBtnText.DOFade(0, .25f);
         yield return new WaitForSeconds(.25f);

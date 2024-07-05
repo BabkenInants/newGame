@@ -41,8 +41,19 @@ public class Player : MonoBehaviour
     public Image timerImg;
     public Text timerTxt;
     public GameObject authPanel;
+    [Header("Audio")] 
+    public Sprite musicOn;
+    public Sprite musicOff;
+    public AudioSource music;
+    public Image musicImg;
+    public Sprite sfxOn;
+    public Sprite sfxOff;
+    public Image sfxImg;
+    public GameObject coinSfxPref;
+    public GameObject obsSfxPref;
+    public GameObject btnSfxPref;
     #endregion
-
+    
     #region privateVariables
     private int coinIndex;
     private int score;
@@ -63,11 +74,23 @@ public class Player : MonoBehaviour
     private bool stopTimer;
     private bool isSecondAd;
     private bool gotsecondAd;
+    private int speedStreak;
+    private int lastSpeed = 1;
+    private bool musicIsOn = true;
+    private bool sfxIsOn = true;
     //private float deltaTime; //FPSCounter
     #endregion
 
     private void OnEnable() => YandexGame.RewardVideoEvent += Continue;
     private void OnDisable() => YandexGame.RewardVideoEvent -= Continue;
+    private void OnApplicationFocus(bool hasFocus)
+    {
+        if (!hasFocus)
+        {
+            YandexGame.SaveProgress();
+        }
+    }
+
     private void Start()
     {
         Application.targetFrameRate = 60; //30FPS lock on Android problem solution
@@ -92,14 +115,20 @@ public class Player : MonoBehaviour
         
         if(tutorialMode)
             FindObjectOfType<Tutorial>().StartCoroutine(FindObjectOfType<Tutorial>().RunTutorial());
+        musicIsOn = YandexGame.savesData.musicIsOn;
+        sfxIsOn = YandexGame.savesData.sfxIsOn;
+        musicImg.sprite = musicIsOn ? musicOn : musicOff;
+        music.mute = !musicIsOn;
+        sfxImg.sprite = sfxIsOn ? sfxOn : sfxOff;
     }
+    
     void Update()
     {
         //FPSCounter
         /*deltaTime += (Time.unscaledDeltaTime - deltaTime) * 0.1f;
         float fps = 1.0f / deltaTime;
         FPSTxt.text = string.Format("{0:0.} fps", fps);*/
-
+        
         if (isSecondAd)
             YandexGame.CloseVideoEvent += getSecondAd;
         else
@@ -131,9 +160,32 @@ public class Player : MonoBehaviour
             {
                 changedSpeed = true;
                 int temp = Random.Range(1, 3);
+                if (score > 20)
+                {
+                    if (lastSpeed == temp)
+                    {
+                        if (speedStreak < 3)
+                            speedStreak++;
+                        else if (speedStreak == 3)
+                        {
+                            speedStreak = 0;
+                            temp = temp == 1 ? 2 : 1;
+                        }
+                    }
+                    else if (lastSpeed != temp)
+                    {
+                        speedStreak = 0;
+                    }
+                    lastSpeed = temp;
+                }
+                else if (score == 20)
+                {
+                    temp = 2;
+                    lastSpeed = temp;
+                }
                 for (int i = 0; i < obstacles.Length; i++)
                 {
-                    if (score < 15)
+                    if (score < 20)
                         obstacles[i].speed += speedToAdd;
                     else
                         obstacles[i].speed += temp == 1 ? speedToAdd : -speedToAdd;
@@ -167,9 +219,10 @@ public class Player : MonoBehaviour
     //UI Play Button
     public void PlayButton()
     {
+        if(sfxIsOn) 
+            Instantiate(btnSfxPref);
         StartGame();
     }
-    
     public void MButton()
     {
         //Main Button - The button that is responding when tapping on screen
@@ -186,6 +239,24 @@ public class Player : MonoBehaviour
                 addedScore = false;
             }
         }
+    }
+    public void MusicBtn()
+    {
+        if(sfxIsOn)
+            Instantiate(btnSfxPref);
+        musicIsOn = !musicIsOn;
+        music.mute = !music.mute;
+        musicImg.sprite = musicIsOn ? musicOn : musicOff;
+        YandexGame.savesData.musicIsOn = musicIsOn;
+    }
+
+    public void SFXBtn()
+    {
+        if(sfxIsOn)
+            Instantiate(btnSfxPref);
+        sfxIsOn = !sfxIsOn;
+        sfxImg.sprite = sfxIsOn ? sfxOn : sfxOff;
+        YandexGame.savesData.sfxIsOn = sfxIsOn;
     }
     
     #endregion
@@ -209,6 +280,8 @@ public class Player : MonoBehaviour
             platformAnim.SetBool("GameIsRunning", true);
             heartsAnim.SetBool("GameIsRunning", true);
             canStart = false;
+            lastSpeed = 1;
+            speedStreak = 0;
         }
     }
 
@@ -254,6 +327,8 @@ public class Player : MonoBehaviour
         addedScore = true;
         for (int i = 0; i < obstacles.Length; i++)
             obstacles[i].speed = defaultSpeed;
+        lastSpeed = 1;
+        speedStreak = 0;
     }
     
     private void Randomize()
@@ -276,6 +351,8 @@ public class Player : MonoBehaviour
         {
             if (!addedScore)
             {
+                if (sfxIsOn)
+                    Instantiate(coinSfxPref);
                 score++;
                 addedScore = true;
                 other.gameObject.SetActive(false);
@@ -291,6 +368,8 @@ public class Player : MonoBehaviour
         {
             if (!decreasedHealth)
             {
+                if (sfxIsOn)
+                    Instantiate(obsSfxPref);
                 decreasedHealth = true;
                 health--;
                 if (health <= 0)
@@ -301,6 +380,8 @@ public class Player : MonoBehaviour
                         foreach (Button btn in continuePanelButtons)
                             btn.interactable = true;
                         StartCoroutine(RunTimer());
+                        timerImg.fillAmount = 1;
+                        timerTxt.text = "5";
                         continueCount--;
                         isSecondAd = false;
                     }
@@ -338,10 +419,14 @@ public class Player : MonoBehaviour
         int count = 5;
         while (count >= 0)
         {
-            timerImg.DOFillAmount(.2f * count, 1f);
-            timerTxt.text = count.ToString();
-            yield return new WaitForSeconds(1);
-            count--;
+            if (!stopTimer)
+            {
+                timerImg.DOFillAmount(.2f * count, 1f);
+                timerTxt.text = count.ToString();
+                yield return new WaitForSeconds(1);
+                count--;
+            }
+            else yield break;
         }
         if(!stopTimer)
             EndGame(true);
