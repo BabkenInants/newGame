@@ -12,7 +12,6 @@ public class Tutorial : MonoBehaviour
     public Text tapText;
     public Text fiveFoldText;
     public Image playButton;
-    public Animator buttonsAnim;
     public Condition condition;
     private bool _pressedPlayBtn;
     private bool _pressedMBtn;
@@ -41,12 +40,25 @@ public class Tutorial : MonoBehaviour
         panel.GetComponent<Image>().DOFade(.6f, .5f);
         playBtnText.DOFade(1, 1f);
         playButton.DOColor(Color.white, .5f);
-        buttonsAnim.SetTrigger("TutorialMode");
         foreach (Button button in buttons)
             button.interactable = false;
         yield return new WaitForSeconds(1f);
         while (!_pressedPlayBtn)
+        {
+            if (!FindObjectOfType<Player>().tutorialMode)
+            {
+                condition = Condition.Completed;
+                panel.SetActive(false);
+                panel.GetComponent<Image>().DOFade(0f, .5f);
+                playBtnText.DOFade(0, .5f);
+                playButton.DOColor(FindObjectOfType<ThemeManager>().CurrentTheme.backgroundColor, .5f);
+                foreach (Button button in buttons)
+                    button.interactable = true;
+                yield return new WaitForSeconds(.5f);
+                yield break;
+            }
             yield return new WaitForSeconds(.1f);
+        }
         foreach (Button button in buttons)
             button.interactable = true;
         panel.GetComponent<Image>().DOFade(.4f, .25f);

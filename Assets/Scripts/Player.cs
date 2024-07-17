@@ -67,7 +67,6 @@ public class Player : MonoBehaviour
     private bool changedTheme;
     private bool changedDirection;
     private bool changedSpeed;
-    private bool canEndGameWithEscape;
     private bool decreasedHealth;
     private ThemeManager TM;
     private int continueCount = 2;
@@ -78,6 +77,7 @@ public class Player : MonoBehaviour
     private int lastSpeed = 1;
     private bool musicIsOn = true;
     private bool sfxIsOn = true;
+    private bool lastAuth;
     //private float deltaTime; //FPSCounter
     #endregion
 
@@ -94,6 +94,7 @@ public class Player : MonoBehaviour
     private void Start()
     {
         Application.targetFrameRate = 60; //30FPS lock on Android problem solution
+        lastAuth = YandexGame.auth;
         if (!YandexGame.auth)
             authPanel.SetActive(true);
         TM = FindObjectOfType<ThemeManager>();
@@ -107,9 +108,6 @@ public class Player : MonoBehaviour
             lastScoreText.text = "Последний Счёт: 0";
             bestScoreText.text = "Лучший Счёт: " + YandexGame.savesData.bestScore;
         }
-        
-        //TODO remove on release for yandex games
-        canEndGameWithEscape = Application.platform != RuntimePlatform.WebGLPlayer;
 
         tutorialMode = !YandexGame.savesData.completedTutorial;
         
@@ -124,6 +122,16 @@ public class Player : MonoBehaviour
     
     void Update()
     {
+        if (!lastAuth && YandexGame.auth)
+        {
+            YandexGame.LoadCloud();
+            lastAuth = YandexGame.auth;
+        }
+        tutorialMode = !YandexGame.savesData.completedTutorial;
+        if (YandexGame.lang == "en")
+            bestScoreText.text = "Best Score: " + YandexGame.savesData.bestScore;
+        else if (YandexGame.lang == "ru")
+            bestScoreText.text = "Лучший Счёт: " + YandexGame.savesData.bestScore;
         //FPSCounter
         /*deltaTime += (Time.unscaledDeltaTime - deltaTime) * 0.1f;
         float fps = 1.0f / deltaTime;
@@ -191,12 +199,6 @@ public class Player : MonoBehaviour
                         obstacles[i].speed += temp == 1 ? speedToAdd : -speedToAdd;
                 }
             }
-
-            //TODO remove on release for yandex games
-            if (Input.GetKeyUp(KeyCode.Escape) && canEndGameWithEscape)
-            {
-                EndGame(true);
-            }
         }
     }
     
@@ -225,7 +227,7 @@ public class Player : MonoBehaviour
     }
     public void MButton()
     {
-        //Main Button - The button that is responding when tapping on screen
+        //Main Button - The button that responds to touches on the screen
         if (gameIsRunning && !animIsRunning && canPress && addedScore && coins[coinIndex].activeSelf && 
             FindObjectOfType<Tutorial>().condition != Tutorial.Condition.FiveFold)
         {
@@ -242,7 +244,7 @@ public class Player : MonoBehaviour
     }
     public void MusicBtn()
     {
-        if(sfxIsOn)
+        if (sfxIsOn)
             Instantiate(btnSfxPref);
         musicIsOn = !musicIsOn;
         music.mute = !music.mute;
@@ -252,8 +254,7 @@ public class Player : MonoBehaviour
 
     public void SFXBtn()
     {
-        if(sfxIsOn)
-            Instantiate(btnSfxPref);
+        Instantiate(btnSfxPref);
         sfxIsOn = !sfxIsOn;
         sfxImg.sprite = sfxIsOn ? sfxOn : sfxOff;
         YandexGame.savesData.sfxIsOn = sfxIsOn;
@@ -336,7 +337,7 @@ public class Player : MonoBehaviour
         if (gameIsRunning)
         {
             tempIndex = Random.Range(0, 4);
-            while (tempIndex == coinIndex) 
+            while (tempIndex == coinIndex)
                 tempIndex = Random.Range(0, 4);
             coinIndex = tempIndex;
             for (int i = 0; i < coins.Length; i++)
@@ -410,6 +411,7 @@ public class Player : MonoBehaviour
             health = 3;
         continuePanel.SetActive(false);
         stopTimer = true;
+        canPress = true;
     }
     
     public IEnumerator RunTimer()
@@ -449,6 +451,7 @@ public class Player : MonoBehaviour
     
     public void ContinueBtn(bool x2)
     {
+        canPress = false;
         foreach (Button btn in continuePanelButtons)
             btn.interactable = false;
         YandexGame.RewVideoShow(x2? 2 : 1);
@@ -461,6 +464,7 @@ public class Player : MonoBehaviour
                 img.sprite = heart;
             }
         }
+        canPress = false;
     }
 
     #endregion

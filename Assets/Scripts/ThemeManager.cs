@@ -27,11 +27,12 @@ public class ThemeManager : MonoBehaviour
         index = 0;
         maxIndex = Themes.Length - 1;
         bgColor = Themes[0].backgroundColor;
+        darkBg = Themes[0].darkBg;
         CurrentTheme = Themes[index];
-        for (int i = 0; i < UIImages.Length; i++)
-        {
-            UIImages[i].color = bgColor;
-        }
+        foreach (Image img in UIImages)
+            img.color = bgColor;
+        foreach (Image img in DarkImages)
+            img.color = darkBg;
     }
 
     public void NextTheme()
